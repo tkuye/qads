@@ -1,19 +1,23 @@
 from typing import List
 from haystack import Document
 from haystack.document_stores import FAISSDocumentStore
-from haystack.pipelines import GenerativeQAPipeline
+from haystack.pipelines import ExtractiveQAPipeline
+
 from haystack.nodes import (
-	RAGenerator,
+	FARMReader,
 	DensePassageRetriever,
 	PreProcessor
 )
 
-from haystack.utils import convert_files_to_docs, print_answers
+from haystack.utils import convert_files_to_dicts, print_answers, launch_milvus
+from haystack.document_stores import MilvusDocumentStore
+
 
 def create_documents(dir_path) -> List[Document]:
 	"""
 		Creates a list of documents from a directory of pdfs.
 	"""
+
 	final_docs = []
 	processor = PreProcessor(
     clean_empty_lines=True,
@@ -22,45 +26,43 @@ def create_documents(dir_path) -> List[Document]:
     split_by="word",
     split_length=200,
     split_respect_sentence_boundary=True,
-    split_overlap=0
+    split_overlap=10
 	)
 
-	docs = convert_files_to_docs(dir_path=dir_path)
+	docs = convert_files_to_dicts(dir_path=dir_path)
 	for doc in docs:
-		final_docs.append(processor.process(doc))
+		final_docs.extend(processor.process(doc))
 	
 	return final_docs
 
-document_store = FAISSDocumentStore(faiss_index_factory_str="Flat", return_embedding=True)
+
+
+
+documents = create_documents(dir_path="./pdfs")
+
+launch_milvus()
+document_store = MilvusDocumentStore()
+
+document_store.write_documents(documents)
 
 retriever = DensePassageRetriever(
     document_store=document_store,
     query_embedding_model="facebook/dpr-question_encoder-single-nq-base",
     passage_embedding_model="facebook/dpr-ctx_encoder-single-nq-base",
+    max_seq_len_query=64,
+    max_seq_len_passage=256,
     embed_title=True,
+    use_fast_tokenizers=True,
 )
 
-document_store.update_embeddings(retriever=retriever)
+#document_store.update_embeddings(retriever=retriever)
 
-generator = RAGenerator(
-    model_name_or_path="facebook/rag-token-nq",
-    top_k=1,
-    max_length=200,
-    min_length=2,
-    embed_title=True,
-    num_beams=2,
-)
+reader = FARMReader(model_name_or_path="deepset/roberta-base-squad2")
 
 
 if __name__ == "__main__":
-	documents = create_documents(dir_path="./pdfs")
-
-	document_store.write_documents(documents)
-
-	# Add documents embeddings to index
 	
-
-	pipe = GenerativeQAPipeline(generator=generator, retriever=retriever)
+	pipe = ExtractiveQAPipeline(reader, retriever)
 
 	questions = [
 	"What is the fur trade?",
@@ -69,6 +71,5 @@ if __name__ == "__main__":
 	]
 
 	for question in questions:
-		print("Question: {}".format(question))
-		res = pipe.run(query=question, params={"Generator": {"top_k": 1}, "Retriever": {"top_k": 5}})
+		res = pipe.run(query=question, params={"Retriever": {"top_k": 10}, "Reader": {"top_k": 5}})
 		print_answers(res, details="minimum")

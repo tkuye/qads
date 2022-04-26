@@ -1,0 +1,15 @@
+artifact_uri: file:///Users/tosinkuye/Desktop/qads/mlruns/0/d1297ca84585448b9b469c99fd06bf93/artifacts
+end_time: 1650944878705
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+name: ''
+run_id: d1297ca84585448b9b469c99fd06bf93
+run_uuid: d1297ca84585448b9b469c99fd06bf93
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1650944839346
+status: 3
+tags: []
+user_id: tosinkuye
